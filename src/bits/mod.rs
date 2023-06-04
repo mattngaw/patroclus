@@ -6,7 +6,7 @@ use std::fmt::{Display, Debug};
 
 use crate::util::PRINT_ORDER;
 
-/// Used to find the flipped representation of a value (from black's POV)
+/// Used to find the flipped representation of a object (from opposite POV)
 pub trait Flippable 
 where Self: Copy + Sized {
     fn flipped(&self) -> Self;
@@ -36,27 +36,51 @@ where Self: Copy + Sized {
 pub struct Square(u32);
 
 impl Square {
-    pub const COUNT: u32 = 64;
+    /// Total number of squares on a chessboard
+    pub const COUNT: usize = 64;
 
-    pub fn new(value: u32) -> Self {
+    pub const ITER: [Square; Self::COUNT] = {
+        let mut result = [Square::new(0); Self::COUNT];
+        let mut i = 0;
+        while i < Self::COUNT {
+            result[i] = Square::new(i as u32);
+            i += 1;
+        }
+        result
+    };
+
+}
+
+impl Square {
+    /// Creates a new square
+    #[inline]
+    pub const fn new(value: u32) -> Self {    
         debug_assert!(value < 64);
         Square(value)
     }
 }
 
 impl From<Coords> for Square {
-    fn from(Coords(r, f): Coords) -> Self {
+    /// Creates a square from a [`Coords`]
+    #[inline]
+    fn from(Coords(f, r): Coords) -> Self {
         Square::new(r as u32 * 8 + f as u32)
     }
 }
 
 impl Flippable for Square {
+    #[inline]
     fn flipped(&self) -> Self {
         Square(63 - self.0)
     }
 }
 
 impl From<Square> for usize {
+    /// Returns the value of the square as a [`usize`]
+    /// 
+    /// # Note
+    /// Typically used as an index (e.g. into a [`Vec`] or array)
+    #[inline]
     fn from(s: Square) -> Self {
         s.0 as usize
     }
@@ -95,7 +119,7 @@ pub enum File {
 
 /// The coordinates of a square on a chessboard
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Coords(Rank, File);
+pub struct Coords(pub File, pub Rank);
 
 
 /// An occupancy set for a chessboard
@@ -149,72 +173,87 @@ impl Bitboard {
 }
 
 
-/// **Creation methods**
+/// Create methods
 impl Bitboard {
 
+    /// Creates a new bitboard from a [`u64`]
      #[inline]
     pub fn new(value: u64) -> Self {
         Bitboard(value)
     }
 
+    /// Creates an empty bitboard
     #[inline]
     pub fn empty() -> Self {
         Bitboard(0u64)
     }
 
+    /// Creates a full bitboard
     #[inline]
     pub fn full() -> Self {
         Bitboard(!0u64)
     }
 
+    /// Creates a bitboard with the squares in rank `r` set
     #[inline]
     pub fn rank(r: Rank) -> Self {
         Bitboard(Self::RANK_MASKS[r as usize])
     }
 
+    /// Creates a bitboard with the squares in file `f` set
     #[inline]
     pub fn file(f: File) -> Self {
         Bitboard(Self::FILE_MASKS[f as usize])
     }
 
+    /// Creates a bitboard with the square `s` set
     #[inline]
     pub fn square(s: Square) -> Self {
         Bitboard(1u64 << (s.0 as u64))
     }
 
+    /// Creates a bitboard with the square at coords `c` set
     #[inline]
     pub fn coords(c: Coords) -> Self {
         Bitboard(1u64 << Square::from(c).0)
     }
 }
 
-/// **Status/reading methods**
+
+/// # Read methods
 impl Bitboard {
+    /// Returns `true` if the bitboard is empty
     #[inline]
     pub fn is_empty(self) -> bool {
         self.0 == 0u64
     }
 
+    /// Returns `true` if the bitboard is nonempty
     #[inline]
     pub fn is_any(self) -> bool {
         self.0 != 0u64
     }
 
+    /// Returns `true` if the bitboard contains only one square
     #[inline]
     pub fn is_singular(self) -> bool {
         self.0.is_power_of_two()
     }
     
+    /// Returns `true` if the bitboard contains the square `s`
     #[inline]
     pub fn contains(self, s: Square) -> bool {
         (Bitboard::square(s) & self).is_any()
     }
 
+    /// Returns the number of squares set in the bitboard
     #[inline]
     pub fn count(self) -> u32 {
         self.0.count_ones()
     }
 
+    /// Returns the square with the highest index, or [`None`] if the bitboard
+    /// is empty 
     #[inline]
     pub fn largest_square(self) -> Option<Square> {
         self.is_any().then(|| {
@@ -223,6 +262,8 @@ impl Bitboard {
         })
     }
 
+    /// Returns the square with the lowest index, or [`None`] if the bitboard 
+    /// is empty
     #[inline]
     pub fn smallest_square(self) -> Option<Square> {
         self.is_any().then_some({
@@ -232,8 +273,10 @@ impl Bitboard {
     }
 }
 
-/// **Update/modifying methods**
+/// # Update methods
 impl Bitboard {
+    /// Inserts the square to the bitboard and returns `true` if the square was 
+    /// newly inserted
     #[inline]
     pub fn insert(&mut self, s: Square) -> bool {
         let c = !self.contains(s);
@@ -241,6 +284,8 @@ impl Bitboard {
         c
     }
 
+    /// Removes the square from the bitboard and returns `true` if the square
+    /// was in the bitboard
     #[inline]
     pub fn remove(&mut self, s: Square) -> bool {
         let c = self.contains(s);
@@ -284,7 +329,7 @@ impl BitAndAssign for Bitboard {
 impl BitXor for Bitboard {
     type Output = Bitboard;
 
-    /// Disjoin union of two bitboards.
+    /// Disjoint union of two bitboards.
     #[inline]
     fn bitxor(self, rhs: Self) -> Self::Output {
         Bitboard(self.0 ^ rhs.0)
