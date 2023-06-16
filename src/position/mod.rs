@@ -2,19 +2,48 @@
 
 pub mod mailbox;
 pub mod castling;
+pub mod board;
+pub mod util;
 
-use crate::bits::{File, Rank, Coords, Square, Bitboard, Flippable};
-use castling::{Castling, CastlingSide};
-use mailbox::Mailbox;
+use crate::bits::*;
+use self::castling::*;
+use self::board::Board;
+use self::util::*;
+
+use std::fmt::Display;
+
 
 /// The color of a piece, turn, etc.
+#[allow(missing_docs)]
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum Color {
     White = 0,
     Black = 1,
 }
 
+impl From<Color> for char {
+    fn from(c: Color) -> Self {
+        match c {
+            Color::White => 'w',
+            Color::Black => 'b',
+        }
+    }
+}
+
+impl TryFrom<char> for Color {
+    type Error = char;
+
+    fn try_from(c: char) -> Result<Self, Self::Error> {
+        match c {
+            'w' => Ok(Color::White),
+            'b' => Ok(Color::Black),
+            _ => Err(c),
+        }
+    }
+}
+
 /// The type of chess piece
+#[allow(missing_docs)]
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum Role {
     Pawn = 0,
@@ -50,391 +79,294 @@ impl Role {
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub struct Piece(pub Color, pub Role);
 
-/// The physical, time-independent state of a chess board
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
-pub struct Board {
-    colors: [Bitboard; 2],
-    roles: [Bitboard; 5],
-    kings: [Square; 2],
-    pieces: Mailbox,
+impl From<Piece> for char {
+    fn from(p: Piece) -> Self {
+        match p {
+            WHITE_PAWN => 'P',
+            WHITE_KNIGHT => 'N',
+            WHITE_BISHOP => 'B',
+            WHITE_ROOK => 'R',
+            WHITE_QUEEN => 'Q',
+            WHITE_KING => 'K',
+            BLACK_PAWN => 'p',
+            BLACK_KNIGHT => 'n',
+            BLACK_BISHOP => 'b',
+            BLACK_ROOK => 'r',
+            BLACK_QUEEN => 'q',
+            BLACK_KING => 'k',
+        }
+    }
+}
+
+impl TryFrom<char> for Piece {
+    type Error = char;
+
+    fn try_from(c: char) -> Result<Self, Self::Error> {
+        match c {
+            'P' => Ok(WHITE_PAWN),
+            'N' => Ok(WHITE_KNIGHT),
+            'B' => Ok(WHITE_BISHOP),
+            'R' => Ok(WHITE_ROOK),
+            'Q' => Ok(WHITE_QUEEN),
+            'K' => Ok(WHITE_KING),
+            'p' => Ok(BLACK_PAWN),
+            'n' => Ok(BLACK_KNIGHT),
+            'b' => Ok(BLACK_BISHOP),
+            'r' => Ok(BLACK_ROOK),
+            'q' => Ok(BLACK_QUEEN),
+            'k' => Ok(BLACK_KING),
+            _ => Err(c),
+        }
+    }
+}
+
+impl Display for Piece {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", char::from(*self))
+    }
+}
+
+/// A time-dependent representation of the state of a chess game
+#[derive(PartialEq, Eq, Debug)]
+pub struct Position {
+    board: Board,
+    turn: Color,
+    castling: Castling,
     en_passant: Option<Square>,
-    pub castling: Castling,
+    halfmove: u32,
+    fullmove: u32,
 }
 
-/// # Create methods
-impl Board {
-    /// Creates a new chessboard
-    ///
-    /// By default the kings are on e1 and e8
+impl Position {
+    /// Creates a new, empty chess position
     pub fn new() -> Self {
-        let white_king = Square::from(Coords(File::E, Rank::First));
-        let black_king = Square::from(Coords(File::E, Rank::Eighth));
-
-        Board {
-            colors: [
-                Bitboard::square(white_king), 
-                Bitboard::square(black_king)
-            ],
-            roles: [Bitboard::empty(); 5],
-            kings: [white_king, black_king],
-            pieces: Mailbox::new(),
-            en_passant: None,
+        Position {
+            board: Board::new(),
+            turn: Color::White,
             castling: Castling::new(),
+            en_passant: None,
+            halfmove: 1,
+            fullmove: 1,
         }
     }
 
-}
-
-/// # Read methods
-impl Board {
-    /// Gets the piece at a square `s`, if any
-    #[inline]
-    pub fn get(&self, s: Square) -> Option<Piece> {
-        self.debug_verify();
-
-        let p = self.pieces[s];
-
-        debug_assert!(p == self.get_bitboard(s));
-
-        p
-    }
-
-    /// Gets the piece at a square `s`, if any, via bitboards instead of the 
-    /// mailbox
-    /// 
-    /// Use for verification only, as this method is slower than checking the 
-    /// mailbox
-    #[inline]
-    fn get_bitboard(&self, s: Square) -> Option<Piece> {
-        self.debug_verify();
-        let white_b = self.colors[Color::White as usize];
-        let black_b = self.colors[Color::Black as usize];
-
-        let white = white_b.contains(s);
-        let black = black_b.contains(s);
-
-        let c = match (white, black) {
-            (true, true) => panic!("Square can't contain white and black piece"),
-            (false, false) => return None,
-            (true, false) => Color::White,
-            (false, true) => Color::Black,
-        };
-
-        for r in Role::ITER_PIECE {
-            let role_b = self.roles[r as usize];
-            if role_b.contains(s) {
-                return Some(Piece(c, r));
-            }
+    /// Attempts to create a chess position from a FEN string
+    pub fn from_fen_string(fen: String) -> Result<Position, &'static str> {
+        let tokens: Vec<&str> = fen.split(' ').collect();
+        
+        if tokens.len() != 6 {
+            return Err("Invalid number of fields in FEN string")
         }
-
-        panic!("Found piece in color_b but not in role_b")
-    }
-
-    /// Gets the bitboard containing all squares of color `c`
-    #[inline]
-    pub fn color(&self, c: Color) -> Bitboard {
-        self.colors[c as usize]
-    }
-
-    /// Gets the bitboard containing all squares of role `r`
-    #[inline]
-    pub fn role(&self, r: Role) -> Bitboard {
-        debug_assert_ne!(r, Role::King);
-        self.roles[r as usize]
-    }
-
-    /// Gets the bitbaord containing all squares of piece `p`
-    /// 
-    /// # Precondition
-    /// 
-    /// If asking for the king, use [`king_square`](Self::king_square()) instead
-    #[inline]
-    pub fn piece(&self, p: Piece) -> Bitboard {
-        debug_assert_ne!(p.1, Role::King);
-        let Piece(c, r) = p;
-        self.color(c) & self.role(r)
-    }
-
-    /// Gets the square of the color `c` king
-    #[inline]
-    pub fn king_square(&self, c: Color) -> Square {
-        self.kings[c as usize]
-    }
-
-    /// Gets the bitboard containing the square of the color `c` king
-    #[inline]
-    pub fn king_bitboard(&self, c: Color) -> Bitboard {
-        Bitboard::square(self.king_square(c))
-    }
-
-    /// Gets the bitboard containing all the occupied squares
-    #[inline]
-    pub fn all(&self) -> Bitboard {
-        self.colors[Color::White as usize] | self.colors[Color::Black as usize]
-    }
-
-    /// Gets the bitboard containing all the empty squares
-    #[inline]
-    pub fn none(&self) -> Bitboard {
-        !self.all()
-    }
-}
-
-/// # Update methods
-impl Board {
-    /// Attempts to place piece `p` on square `s`
-    /// 
-    /// If `s` is empty, it places `p` on `s` and returns `true`,
-    /// otherwise does nothing and returns false
-    /// 
-    /// This method must case on the occupancy of a square, and thus must not be
-    /// used for quickly moving pieces (see [`replace`](Self::replace()) and 
-    /// [`move`](Self::move()))
-    /// 
-    /// In most cases, this method should only be used to place *new* pieces on 
-    /// the board
-    pub fn place(&mut self, s: Square, p: Piece) -> bool {
-        self.debug_verify();
-
-        let status = match (self.pieces[s], p) {
-            // Nonempty square
-            (Some(_), _) => false,
-            
-            // The king cannot be "placed", only moved
-            (None, Piece(c, Role::King)) => {
-                // Remove from board
-                let old_s = self.kings[c as usize];
-                self.colors[c as usize].remove(old_s);
-                self.pieces[old_s] = None;
-                
-                // Add to board
-                self.kings[c as usize] = s;
-                self.colors[c as usize].insert(s);
-                self.pieces[s] = Some(p);
-                true
-            }
-            (None, Piece(c, r)) => {
-                self.colors[c as usize].insert(s);
-                self.roles[r as usize].insert(s);
-                true
-            }
+        
+        let placement_str = tokens[0];
+        let turn_str = tokens[1];
+        let castling_str = tokens[2];
+        let en_passant_str = tokens[3];
+        let halfmove_str = tokens[4];
+        let fullmove_str = tokens[5];
+        
+        let p = Position {
+            board: Board::from_placement(get_placement(placement_str)),
+            turn: get_turn(turn_str),
+            castling: get_castling(castling_str),
+            en_passant: get_en_passant(en_passant_str),
+            halfmove: get_number(halfmove_str),
+            fullmove: get_number(fullmove_str),
         };
         
-        self.debug_verify();
-
-        status
-    }
-
-    /// Replaces the piece (if any) on square `s` with the piece `p`
-    /// 
-    /// # Preconditions
-    /// 
-    /// Cannot replace on `s` with a king, as the king can only be moved
-    /// 
-    /// Cannot replace a king, as there must always be one king for each color
-    pub fn replace(&mut self, s: Square, p: Piece) -> Option<Piece> {
-        debug_assert_ne!(p.1, Role::King);
-        
-        self.debug_verify();
-
-        let captured = self.pieces[s];
-
-        // Require that the replaced piece is not the king
-        debug_assert!(captured.map_or(true, |p| p.1 != Role::King));
-        
-        self.colors[p.0 as usize].insert(s);
-        self.roles[p.1 as usize].insert(s);
-        self.pieces[s] = Some(p);
-
-        self.debug_verify();
-
-        captured
-    }
-
-    /// Moves a (non-king) piece from `s_from` to `s_to`
-    /// 
-    /// Returns the captured piece that was on `s_to`, if there was one
-    /// 
-    /// Use  [`king_move`][Self::king_move()] to move a king
-    /// 
-    /// # Requires
-    /// 
-    /// Neither the capturing nor captured pieces can be kings
-    pub fn r#move(&mut self, s_from: Square, s_to: Square) -> Option<Piece> {
-        self.debug_verify();
-
-        let capturer = self.get(s_from);
-        debug_assert!(capturer.is_some());
-        let capturer = capturer.unwrap();
-        debug_assert!(capturer.1 != Role::King);
-
-        let captured = self.get(s_to);
-        
-        self.colors[capturer.0 as usize].remove(s_from);
-        self.roles[capturer.1 as usize].remove(s_from);
-        self.pieces[s_from] = None;
-
-        self.colors[capturer.0 as usize].insert(s_to);
-        self.roles[capturer.1 as usize].insert(s_to);
-        self.pieces[s_to] = Some(capturer);
-
-        if let Some(captured) = captured {
-            debug_assert_ne!(captured.1, Role::King);
-            debug_assert_ne!(capturer.0, captured.0);
-            self.colors[captured.0 as usize].remove(s_to);
-            self.roles[captured.1 as usize].remove(s_to);
-        }
-
-        self.debug_verify();
-
-        captured
-    }
-
-    /// Moves the king of color `c` to `s_to`
-    /// 
-    /// Returns the captured piece that was on `s_to`, if there was one
-    /// 
-    /// # Requires
-    /// 
-    /// The captured piece cannot be a king
-    pub fn king_move(&mut self, c: Color, s_to: Square) -> Option<Piece> {
-        self.debug_verify();
-
-        let s_from = self.kings[c as usize];
-
-        let captured = self.get(s_to);
-
-        self.colors[c as usize].remove(s_from);
-        self.pieces[s_from] = None;
-
-        self.colors[c as usize].insert(s_to);
-        self.pieces[s_to] = Some(Piece(c, Role::King));
-        self.kings[c as usize] = s_to;
-
-        if let Some(captured) = captured {
-            debug_assert_ne!(captured.1, Role::King);
-            debug_assert_ne!(c, captured.0);
-            self.colors[captured.0 as usize].remove(s_to);
-            self.roles[captured.1 as usize].remove(s_to);
-        }
-
-        self.debug_verify();
-
-        captured
+        Ok(p)
     }
 }
 
-impl Flippable for Board {
+impl Default for Position {
+    /// Creates the starting position of a chess game
+    fn default() -> Self {
+        Self { 
+            board: Default::default(), 
+            turn: Color::White, 
+            castling: Default::default(), 
+            en_passant: Default::default(), 
+            halfmove: 0, 
+            fullmove: 0
+        }
+    }
+}
+
+impl Flippable for Position {
     fn flipped(&self) -> Self {
-        Board {
-            colors: [self.colors[0].flipped(), self.colors[1].flipped()],
-            roles: [
-                self.colors[0].flipped(),
-                self.colors[1].flipped(),
-                self.colors[2].flipped(),
-                self.colors[3].flipped(),
-                self.colors[4].flipped(),
-            ],
-            kings: [self.kings[0].flipped(), self.kings[1].flipped()],
-            pieces: self.pieces.flipped(),
-            en_passant: self.en_passant.and_then(|s| Some(s.flipped())),
+        Position {
+            board: self.board.flipped(),
+            turn: self.turn,
             castling: self.castling,
+            en_passant: self.en_passant.map(|s| s.flipped()),
+            halfmove: self.halfmove,
+            fullmove: self.fullmove,
         }
     }
 }
 
-/// # Debug methods
-impl Board {
-    /// Verifies that the board state is legal
-    /// 
-    /// Only does checks in dev/debug builds, and disappears in release builds
-    pub fn debug_verify(&self) {
-        if !cfg!(debug_assertions) { 
-            return
-        }
+impl Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.board)
+    }
+}
 
-        use itertools::Itertools;
-
-        log::debug!("debug_verify: Starting...");
-
-        let white = self.colors[Color::White as usize];
-        let black = self.colors[Color::Black as usize];
-
-        let pawns = self.roles[Role::Pawn as usize];
-        let knights = self.roles[Role::Knight as usize];
-        let bishops = self.roles[Role::Bishop as usize];
-        let rooks = self.roles[Role::Rook as usize];
-        let queens = self.roles[Role::Queen as usize];
+impl Position {
+    /// Creates a FEN string from the position
+    pub fn to_fen_string(&self) -> String {
+        let mut fen = String::new();
         
-        let pieces = vec![pawns, knights, bishops, rooks, queens];
-        let pieces_pairings = pieces.into_iter().combinations(2);
+        let Position {
+            board,
+            turn,
+            castling,
+            en_passant,
+            halfmove,
+            fullmove,
+        } = self;
+        
+        placement_str(board, &mut fen);
+        fen.push(' ');
 
-        log::debug!("  Checking that white and black pieces don't overlap");
-        assert_eq!(white & black, Bitboard::empty());
+        fen.push(char::from(*turn));
+        fen.push(' ');
 
-        log::debug!("  Checking that roles don't overlap");
-        for pair in pieces_pairings {
-            assert!((pair[0] & pair[1]).is_empty());
+        fen.push_str(&castling.to_string());
+        fen.push(' ');
+
+        match en_passant {
+            Some(s) => fen.push_str(&s.to_string()),
+            None => fen.push('-'),
         }
+        fen.push(' ');
 
-        log::debug!("  Verifying the king squares");
-        assert_ne!(self.kings[Color::White as usize], 
-                   self.kings[Color::Black as usize]);
-        // TODO Check that the kings are not adjacent
+        fen.push_str(&halfmove.to_string());
+        fen.push(' ');
 
-        log::debug!("  Checking colors and roles overlap once and only once");
-        for c in [Color::White, Color::Black] {
-            let c_b = self.colors[c as usize];
-            for s in c_b {
-                let mut overlapped = false;
-                for r_b in self.roles {
-                    if r_b.contains(s) {
-                        assert!(!overlapped);
-                        overlapped = true;
-                    }
-                }
-                if self.kings[c as usize] == s {
-                    assert!(!overlapped);
-                    overlapped = true;
-                }
-                assert!(overlapped);
-            }
-        }
+        fen.push_str(&fullmove.to_string());
 
-        log::debug!("  Checking that the mailbox matches the bitboards");
-        for (s, o_p) in self.pieces {
-            match o_p {
-                None => assert!(
-                    !white.contains(s) && !black.contains(s)
-                ),
-                Some(Piece(c, r)) => {
-                    assert!(self.colors[c as usize].contains(s));
-                    if r == Role::King {
-                        assert_eq!(self.kings[c as usize], s);
-                    } else {
-                        assert!(self.roles[r as usize].contains(s));
-                    }
-                }
-            }
-        }
-
-        log::debug!("debug_verify: Passed!");
+        fen
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// Position::to_fen_string helper functions
 
-    fn init() {
-        let _ = env_logger::builder().is_test(true).try_init();
+fn placement_str(board: &Board, fen: &mut String) {
+    for r in Rank::iter().rev() {
+        let mut space = 0;
+        for f in File::iter() {
+            let s = Square::from(Coords(f, r));
+            match board.get(s) {
+                Some(p) => {
+                    if space > 0 {
+                        fen.push_str(&space.to_string());
+                    }
+                    fen.push(char::from(p));
+                    space = 0;
+                }
+                None => space += 1
+            }
+        }
+    
+        if space > 0 {
+            fen.push_str(&space.to_string())
+        }
+    
+        if r != Rank::First {
+            fen.push('/');
+        }
     }
+}
 
-    #[test]
-    fn test_debug_verify() {
-        init();
 
-        let b = Board::new();
-        b.debug_verify();
+// Position::from_fen_string helper functions
+
+fn get_placement(s: &str) -> [Option<Piece>; 64] {
+    let mut placement = [None; 64];
+    let mut f_index = 0;
+    let mut r_index = 7;
+    for ch in s.chars() {
+        let s_index = f_index + r_index * 8;
+        if let Some(offset) = ch.to_digit(10) {
+            let offset = offset as usize;
+            assert!(0 < offset && offset < 9);
+            for i in 0..offset {
+                placement[s_index + i] = None;
+            }
+            f_index += offset;
+        } else if ch == '/' {
+            assert_eq!(f_index, 8);
+            f_index = 0;
+            r_index -= 1;
+        } else {
+            match Piece::try_from(ch) {
+                Ok(p) => placement[s_index] = Some(p),
+                Err(ch) => panic!("{ch} is not a valid FEN placement character"),
+            }
+            f_index += 1;
+        }
+    }
+    placement
+}
+
+fn get_turn(s: &str) -> Color {
+    assert_eq!(s.len(), 1);
+    let ch = s.chars().next().unwrap();
+    match Color::try_from(ch) {
+        Ok(c) => c,
+        Err(ch) => panic!("{ch} is not a valid FEN turn"),
+    }
+}
+
+fn get_castling(s: &str) -> Castling {
+    assert!(s.len() < 5);
+    let mut castling = Castling::new();
+    if s == "-" {
+        return castling
+    }
+    let (mut w_ks, mut w_qs) = (false, false);
+    let (mut b_ks, mut b_qs) = (false, false);
+    for ch in s.chars() {
+        match ch {
+            'K' => w_ks = true,
+            'Q' => w_qs = true,
+            'k' => b_ks = true,
+            'q' => b_qs = true,
+            _ => panic!("{ch} is an invalid FEN castling character")
+        }
+    }
+    let white_rights = CastlingRights::new(w_ks, w_qs);
+    let black_rights = CastlingRights::new(b_ks, b_qs);
+    castling.set(Color::White, white_rights);
+    castling.set(Color::Black, black_rights);
+    castling
+}
+
+fn get_en_passant(s: &str) -> Option<Square> {
+    if s.len() == 1 {
+        assert_eq!(s, "-");
+        None
+    } else if s.len() == 2 {
+        let mut chs = s.chars();
+        let f_ch = chs.next().unwrap();
+        let r_ch = chs.next().unwrap();
+        let f = match File::try_from(f_ch) {
+            Ok(f) => f,
+            Err(ch) => panic!("{ch} is an invalid file character"),
+        };
+        let r = match Rank::try_from(r_ch) {
+            Ok(r) => r,
+            Err(ch) => panic!("{ch} is an invalid rank character"),
+        };
+        Some(Square::from(Coords(f, r)))
+    } else {
+        panic!("{s} is invalid en_passant token");
+    }
+}
+
+fn get_number(s: &str) -> u32 {
+    match s.to_string().parse::<u32>() {
+        Ok(n) => n,
+        Err(_) => panic!("{s} is invalid move number"),
     }
 }

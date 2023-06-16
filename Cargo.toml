@@ -19,4 +19,16 @@ path = "src/main.rs"
 name = "patroclus"
 path = "src/lib.rs"
 
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = 3
+debug = false
+
 [dependencies]
+log = { version = "0.4", features = [ "max_level_trace", "release_max_level_warn" ] }
+env_logger = "0.10"
+test-env-log = "0.2.8"
+itertools = "0.10.5"

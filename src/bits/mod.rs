@@ -1,4 +1,4 @@
-//! Structs for working with and keeping track of squares.
+//! A module for working with and keeping track of squares.
 
 use std::ops::{BitOr, BitAnd, BitXor, Not};
 use std::ops::{BitOrAssign, BitAndAssign, BitXorAssign};
@@ -8,9 +8,11 @@ use crate::util::PRINT_ORDER;
 
 /// Used to find the flipped representation of a object (from opposite POV)
 pub trait Flippable 
-where Self: Copy + Sized {
+where Self: Sized {
+    /// Returns the flipped representation
     fn flipped(&self) -> Self;
-
+    
+    /// Flips the representation of `self` in place
     fn flip(&mut self) {
         *self = self.flipped()
     }
@@ -39,7 +41,8 @@ impl Square {
     /// Total number of squares on a chessboard
     pub const COUNT: usize = 64;
 
-    pub const ITER: [Square; Self::COUNT] = {
+    /// Use to iterate over squares from index 0 to 63
+    const ITER: [Square; Self::COUNT] = {
         let mut result = [Square::new(0); Self::COUNT];
         let mut i = 0;
         while i < Self::COUNT {
@@ -58,6 +61,23 @@ impl Square {
         debug_assert!(value < 64);
         Square(value)
     }
+
+    /// Gets rank of square
+    #[inline]
+    pub fn rank(self) -> Rank {
+        Rank::try_from(self.0 / 8).unwrap()
+    }
+    
+    /// Gets file of square
+    #[inline]
+    pub fn file(self) -> File {
+        File::try_from(self.0 % 8).unwrap()
+    }
+
+    /// Returns an iterator over all of the squares
+    pub fn iter() -> std::array::IntoIter<Square, {Self::COUNT}> {
+        Self::ITER.into_iter()
+    }
 }
 
 impl From<Coords> for Square {
@@ -75,6 +95,16 @@ impl Flippable for Square {
     }
 }
 
+impl Display for Square {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let r = self.rank();
+        let f = self.file();
+        let r_ch = char::from(r);
+        let f_ch = char::from(f);
+        write!(formatter, "{}{}", f_ch, r_ch)
+    }
+}
+
 impl From<Square> for usize {
     /// Returns the value of the square as a [`usize`]
     /// 
@@ -88,7 +118,7 @@ impl From<Square> for usize {
 
 
 /// A row on a chessboard
-#[repr(u32)]
+#[allow(missing_docs)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Rank {
     First = 0,
@@ -101,9 +131,77 @@ pub enum Rank {
     Eighth = 7,
 }
 
+impl TryFrom<u32> for Rank {
+    type Error = u32;
+
+    fn try_from(i: u32) -> Result<Self, Self::Error> {
+        match i {
+            0 => Ok(Rank::First),
+            1 => Ok(Rank::Second),
+            2 => Ok(Rank::Third),
+            3 => Ok(Rank::Fourth),
+            4 => Ok(Rank::Fifth),
+            5 => Ok(Rank::Sixth),
+            6 => Ok(Rank::Seventh),
+            7 => Ok(Rank::Eighth),
+            _ => Err(i),
+        }
+    }
+}
+
+impl From<Rank> for char {
+    fn from(r: Rank) -> Self {
+        match r {
+            Rank::First => '1',
+            Rank::Second => '2',
+            Rank::Third => '3',
+            Rank::Fourth => '4',
+            Rank::Fifth => '5',
+            Rank::Sixth => '6',
+            Rank::Seventh => '7',
+            Rank::Eighth => '8',
+        }
+    }
+}
+
+impl TryFrom<char> for Rank {
+    type Error = char;
+
+    fn try_from(ch: char) -> Result<Self, Self::Error> {
+        match ch {
+            '1' => Ok(Rank::First),
+            '2' => Ok(Rank::Second),
+            '3' => Ok(Rank::Third),
+            '4' => Ok(Rank::Fourth),
+            '5' => Ok(Rank::Fifth),
+            '6' => Ok(Rank::Sixth),
+            '7' => Ok(Rank::Seventh),
+            '8' => Ok(Rank::Eighth),
+            _ => Err(ch),
+        }
+    }
+}
+
+impl Rank {
+    const ITER: [Rank; 8] = [
+        Rank::First, 
+        Rank::Second, 
+        Rank::Third,
+        Rank::Fourth, 
+        Rank::Fifth, 
+        Rank::Sixth, 
+        Rank::Seventh, 
+        Rank::Eighth
+    ];
+
+    /// Returns an iterator over all of the ranks
+    pub fn iter() -> std::array::IntoIter<Rank, 8> {
+        Self::ITER.into_iter()
+    }
+}
 
 /// A column on a chessboard
-#[repr(u32)]
+#[allow(missing_docs)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum File {
     A = 0,
@@ -114,6 +212,75 @@ pub enum File {
     F = 5,
     G = 6,
     H = 7,
+}
+
+impl TryFrom<u32> for File {
+    type Error = u32;
+
+    fn try_from(i: u32) -> Result<Self, Self::Error> {
+        match i {
+            0 => Ok(File::A),
+            1 => Ok(File::B),
+            2 => Ok(File::C),
+            3 => Ok(File::D),
+            4 => Ok(File::E),
+            5 => Ok(File::F),
+            6 => Ok(File::G),
+            7 => Ok(File::H),
+            _ => Err(i),
+        }
+    }
+}
+
+impl From<File> for char {
+    fn from(f: File) -> Self {
+        match f {
+            File::A => 'a',
+            File::B => 'b',
+            File::C => 'c',
+            File::D => 'd',
+            File::E => 'e',
+            File::F => 'f',
+            File::G => 'g',
+            File::H => 'h',
+        }
+    }
+}
+
+impl TryFrom<char> for File {
+    type Error = char;
+
+    fn try_from(ch: char) -> Result<Self, Self::Error> {
+        match ch {
+            'a' => Ok(File::A),
+            'b' => Ok(File::B),
+            'c' => Ok(File::C),
+            'd' => Ok(File::D),
+            'e' => Ok(File::E),
+            'f' => Ok(File::F),
+            'g' => Ok(File::G),
+            'h' => Ok(File::H),
+            _ => Err(ch),
+        }
+    }
+}
+
+impl File {
+    const ITER: [File; 8] = [
+        File::A,
+        File::B,
+        File::C,
+        File::D,
+        File::E,
+        File::F,
+        File::G,
+        File::H,
+    ];
+
+    /// Returns an iterator over all of the files
+    pub fn iter() -> std::array::IntoIter<File, 8> {
+        Self::ITER.into_iter()
+    }
 }
 
 
@@ -178,37 +345,37 @@ impl Bitboard {
 
     /// Creates a new bitboard from a [`u64`]
      #[inline]
-    pub fn new(value: u64) -> Self {
+    pub const fn new(value: u64) -> Self {
         Bitboard(value)
     }
 
     /// Creates an empty bitboard
     #[inline]
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         Bitboard(0u64)
     }
 
     /// Creates a full bitboard
     #[inline]
-    pub fn full() -> Self {
+    pub const fn full() -> Self {
         Bitboard(!0u64)
     }
 
     /// Creates a bitboard with the squares in rank `r` set
     #[inline]
-    pub fn rank(r: Rank) -> Self {
+    pub const fn rank(r: Rank) -> Self {
         Bitboard(Self::RANK_MASKS[r as usize])
     }
 
     /// Creates a bitboard with the squares in file `f` set
     #[inline]
-    pub fn file(f: File) -> Self {
+    pub const fn file(f: File) -> Self {
         Bitboard(Self::FILE_MASKS[f as usize])
     }
 
     /// Creates a bitboard with the square `s` set
     #[inline]
-    pub fn square(s: Square) -> Self {
+    pub const fn square(s: Square) -> Self {
         Bitboard(1u64 << (s.0 as u64))
     }
 
@@ -257,7 +424,7 @@ impl Bitboard {
     #[inline]
     pub fn largest_square(self) -> Option<Square> {
         self.is_any().then(|| {
-            let value = (63 - self.0.leading_zeros()) as u32;
+            let value = 63 - self.0.leading_zeros();
             Square::new(value)
         })
     }
@@ -267,7 +434,7 @@ impl Bitboard {
     #[inline]
     pub fn smallest_square(self) -> Option<Square> {
         self.is_any().then_some({
-            let value = self.0.trailing_zeros() as u32; 
+            let value = self.0.trailing_zeros(); 
             Square::new(value)
         })
     }
