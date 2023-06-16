@@ -15,83 +15,52 @@ pub enum CastlingSide {
     Queenside,
 }
 
-/// The castling rights that a side has
-#[derive(PartialEq, Eq, Debug, Copy, Clone)]
-pub struct CastlingRights(bool, bool);
-
-impl CastlingRights {
-    /// Creates a new `CastlingRights`
-    pub fn new(ks: bool, qs: bool) -> Self {
-        CastlingRights(ks, qs)
-    }
-
-    /// Returns `true` if castling on side `cs` is still possible
-    pub fn can_castle(&self, cs: CastlingSide) -> bool {
-        match cs {
-            CastlingSide::Kingside => self.0,
-            CastlingSide::Queenside => self.1,
-        }
-    }
-}
-
 /// The castling state of a chessboard
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
-pub struct Castling(CastlingRights, CastlingRights);
+pub struct Castling {
+    rights: [[bool; 2]; 2]
+}
 
 impl Default for Castling {
     fn default() -> Self {
-        Castling(CastlingRights(true, true), CastlingRights(true, true))
+        Castling { rights: [[true, true], [true, true]] }
     }
 }
 
 impl Castling {
     /// Creates a new `Castling` object
     pub fn new() -> Self {
-        Castling(CastlingRights(false, false), CastlingRights(false, false))
+        Castling { rights: [[false, false], [false, false]] }
     }
 
     /// Gets the castling rights for color `c`
-    pub fn get(self, c: Color) -> CastlingRights {
-        match c {
-            Color::White => self.0,
-            Color::Black => self.1,
-        }
+    pub fn get(self, c: Color, cs: CastlingSide) -> bool {
+        self.rights[c as usize][cs as usize]
     }
 
     /// Sets the castling rights for color `c` to `cr`
-    pub fn set(&mut self, c: Color, cr: CastlingRights) {
-        match c {
-            Color::White => self.0 = cr,
-            Color::Black => self.1 = cr,
-        }
+    pub fn set(&mut self, c: Color, cs: CastlingSide, cr: bool) {
+        self.rights[c as usize][cs as usize] = cr;
     }
 
-    /// Removes castling rights from a color `c` on the side `cs`
-    pub fn remove(&mut self, c: Color, cs: CastlingSide) {
-        let rights = &mut match (c, cs) {
-            (Color::White, CastlingSide::Kingside) => self.0.0,
-            (Color::White, CastlingSide::Queenside) => self.0.1,
-            (Color::Black, CastlingSide::Kingside) => self.1.0,
-            (Color::Black, CastlingSide::Queenside) => self.1.1,
-        };
-        *rights = false;
-    }
-
-    /// Clears the castling rights for both sides
-    pub fn clear(&mut self) {
-        (self.0, self.1) = (
-            CastlingRights(false, false), CastlingRights(false, false)
-        )
+    /// Returns an iterator over the castling rights
+    pub fn iter_rights(&self) -> std::array::IntoIter<(Color, CastlingSide, bool), 4> {
+        [
+            (Color::White, CastlingSide::Kingside, self.rights[0][0]),
+            (Color::White, CastlingSide::Queenside, self.rights[0][1]),
+            (Color::Black, CastlingSide::Kingside, self.rights[1][0]),
+            (Color::Black, CastlingSide::Queenside, self.rights[1][1]),
+        ].into_iter()
     }
 }
 
 impl Display for Castling {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut cr_str = String::new();
-        if self.0.0 { cr_str.push('K') }
-        if self.0.1 { cr_str.push('Q') }
-        if self.1.0 { cr_str.push('k') }
-        if self.1.1 { cr_str.push('q') }
+        if self.rights[0][0] { cr_str.push('K') }
+        if self.rights[0][1] { cr_str.push('Q') }
+        if self.rights[1][0] { cr_str.push('k') }
+        if self.rights[1][1] { cr_str.push('q') }
         if cr_str.is_empty() { cr_str.push('-') }
         write!(f, "{}", cr_str)
     }

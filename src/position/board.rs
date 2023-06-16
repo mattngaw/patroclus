@@ -177,6 +177,11 @@ impl Board {
     pub fn none(&self) -> Bitboard {
         !self.all()
     }
+
+    /// Returns an iterator over the pieces and their 
+    pub fn iter_pieces(&self) -> std::vec::IntoIter<(Square, Option<Piece>)> {
+        self.pieces.into_iter()
+    }
 }
 
 /// # Update methods
@@ -353,7 +358,7 @@ impl Board {
 
         use itertools::Itertools;
 
-        log::debug!("debug_verify: Starting...");
+        log::trace!("debug_verify: Starting...");
 
         let white = self.colors[Color::White as usize];
         let black = self.colors[Color::Black as usize];
@@ -367,20 +372,20 @@ impl Board {
         let pieces = vec![pawns, knights, bishops, rooks, queens];
         let pieces_pairings = pieces.into_iter().combinations(2);
 
-        log::debug!("  Checking that white and black pieces don't overlap");
+        log::trace!("  Checking that white and black pieces don't overlap");
         assert_eq!(white & black, Bitboard::empty());
 
-        log::debug!("  Checking that roles don't overlap");
+        log::trace!("  Checking that roles don't overlap");
         for pair in pieces_pairings {
             assert!((pair[0] & pair[1]).is_empty());
         }
 
-        log::debug!("  Verifying the king squares");
+        log::trace!("  Verifying the king squares");
         assert_ne!(self.kings[Color::White as usize], 
                    self.kings[Color::Black as usize]);
         // TODO Check that the kings are not adjacent
 
-        log::debug!("  Checking colors and roles overlap once and only once");
+        log::trace!("  Checking colors and roles overlap once and only once");
         for c in [Color::White, Color::Black] {
             let c_b = self.colors[c as usize];
             for s in c_b {
@@ -399,7 +404,7 @@ impl Board {
             }
         }
 
-        log::debug!("  Checking that the mailbox matches the bitboards");
+        log::trace!("  Checking that the mailbox matches the bitboards");
         for (s, o_p) in self.pieces {
             match o_p {
                 None => assert!(
@@ -416,7 +421,7 @@ impl Board {
             }
         }
 
-        log::debug!("debug_verify: Passed!");
+        log::trace!("debug_verify: Passed!");
     }
 }
 

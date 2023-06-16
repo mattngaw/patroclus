@@ -130,11 +130,17 @@ impl Display for Piece {
 /// A time-dependent representation of the state of a chess game
 #[derive(PartialEq, Eq, Debug)]
 pub struct Position {
+    /// The placement of pieces
     pub board: Board,
+    /// Whose move it is
     pub turn: Color,
+    /// The castling rights for either side
     pub castling: Castling,
+    /// Whether en passant is possible
     pub en_passant: Option<Square>,
+    /// Number of halfmoves since last capture or pawn move
     pub halfmove: u32,
+    /// Number of fullmoves since start of game
     pub fullmove: u32,
 }
 
@@ -325,8 +331,7 @@ fn get_castling(s: &str) -> Castling {
     if s == "-" {
         return castling
     }
-    let (mut w_ks, mut w_qs) = (false, false);
-    let (mut b_ks, mut b_qs) = (false, false);
+    let (mut w_ks, mut w_qs, mut b_ks, mut b_qs) = (false, false, false, false);
     for ch in s.chars() {
         match ch {
             'K' => w_ks = true,
@@ -336,10 +341,12 @@ fn get_castling(s: &str) -> Castling {
             _ => panic!("{ch} is an invalid FEN castling character")
         }
     }
-    let white_rights = CastlingRights::new(w_ks, w_qs);
-    let black_rights = CastlingRights::new(b_ks, b_qs);
-    castling.set(Color::White, white_rights);
-    castling.set(Color::Black, black_rights);
+
+    castling.set(Color::White, CastlingSide::Kingside, w_ks);
+    castling.set(Color::White, CastlingSide::Queenside, w_qs);
+    castling.set(Color::Black, CastlingSide::Kingside, b_ks);
+    castling.set(Color::Black, CastlingSide::Queenside, b_qs);
+
     castling
 }
 

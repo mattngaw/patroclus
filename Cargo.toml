@@ -30,5 +30,6 @@ debug = false
 [dependencies]
 log = { version = "0.4", features = [ "max_level_trace", "release_max_level_warn" ] }
 env_logger = "0.10"
-test-env-log = "0.2.8"
-itertools = "0.10.5"
+test-env-log = "0.2"
+itertools = "0.10"
+const-random = "0.1"
