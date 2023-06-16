@@ -3,6 +3,7 @@
 pub mod mailbox;
 pub mod castling;
 pub mod board;
+pub mod zobrist;
 pub mod util;
 
 use crate::bits::*;
@@ -129,12 +130,12 @@ impl Display for Piece {
 /// A time-dependent representation of the state of a chess game
 #[derive(PartialEq, Eq, Debug)]
 pub struct Position {
-    board: Board,
-    turn: Color,
-    castling: Castling,
-    en_passant: Option<Square>,
-    halfmove: u32,
-    fullmove: u32,
+    pub board: Board,
+    pub turn: Color,
+    pub castling: Castling,
+    pub en_passant: Option<Square>,
+    pub halfmove: u32,
+    pub fullmove: u32,
 }
 
 impl Position {

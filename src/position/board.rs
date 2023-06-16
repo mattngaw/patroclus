@@ -141,11 +141,12 @@ impl Board {
         self.roles[r as usize]
     }
 
-    /// Gets the bitbaord containing all squares of piece `p`
+    /// Gets the bitboard containing all squares of piece `p`
     /// 
     /// # Precondition
     /// 
-    /// If asking for the king, use [`king_square`](Self::king_square()) instead
+    /// If querying for the king, use [`king_square`](Self::king_square()) 
+    /// instead
     #[inline]
     pub fn piece(&self, p: Piece) -> Bitboard {
         debug_assert_ne!(p.1, Role::King);
