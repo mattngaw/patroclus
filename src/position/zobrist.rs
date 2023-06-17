@@ -3,7 +3,6 @@
 use crate::{
     position::{
         Color,
-        Role,
         Piece,
         Position,
         board::Board,
@@ -18,6 +17,30 @@ use std::hash::{Hash, Hasher, BuildHasher};
 
 use const_random::const_random;
 
+/// A ZobristHasher factory
+pub struct BuildZobristHasher;
+
+impl BuildZobristHasher {
+    /// Creates a new `BuildZobristHasher`
+    pub fn new() -> Self {
+        BuildZobristHasher
+    }
+}
+
+impl Default for BuildZobristHasher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BuildHasher for BuildZobristHasher {
+    type Hasher = ZobristHasher;
+
+    fn build_hasher(&self) -> Self::Hasher {
+        ZobristHasher::new()
+    }
+}
+
 impl ZobristHasher {
     /// Creates a new Zobrist hasher
     pub fn new() -> Self {
@@ -25,6 +48,13 @@ impl ZobristHasher {
     }
 }
 
+impl Default for ZobristHasher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A Zobrist hasher instance
 pub struct ZobristHasher(u64);
 
 impl Hasher for ZobristHasher {
@@ -33,18 +63,10 @@ impl Hasher for ZobristHasher {
     }
 
     fn write(&mut self, bytes: &[u8]) {
-        let mut shamt = {
-            #[cfg(target_endian="little")] { 0 }
-            #[cfg(target_endian="big")] { 7 }
-        };
+        let mut shamt = 0;
         for &byte in bytes {
-            shamt = {
-                #[cfg(target_endian="little")]
-                { (shamt + 1) & 8 }
-                #[cfg(target_endian="big")]
-                { (shamt - 1) & 8 }
-            };
             self.0 ^= u64::from(byte) << (shamt * 8);
+            shamt = (shamt + 1) & 7;
         }
     }
 }
@@ -61,24 +83,11 @@ impl Hash for Position {
 }
 
 impl Board {
-    pub const ZOBRIST_PRNS: [[[u64; 6]; 2]; 64] = {
-        let mut _prns = const_random!([u8; 64]);
-        let mut prns = [[[0; 6]; 2]; 64];
-
-        let mut i = 0;
-        while i < 64 {
-            let mut j = 0;
-            while j < 2 {
-                let mut k = 0;
-                while k < 6 {
-                    prns[i][j][k] = const_random!(u64);
-                    k += 1;
-                }
-                j += 1;
-            }
-            i += 1;
+    const ZOBRIST_PRNS: [[[u64; 6]; 2]; 64] = {
+        let prbs = const_random!([u8; 6144]);
+        unsafe {
+            std::mem::transmute::<[u8; 6144], [[[u64; 6]; 2]; 64]>(prbs)
         }
-        prns
     };
 }
 
@@ -88,10 +97,8 @@ impl Hash for Board {
             if let Some(Piece(c, r)) = o_p {
                 let prn = Self::ZOBRIST_PRNS[usize::from(s)][c as usize][r as usize];
                 state.write_u64(prn);
-                log::debug!("board({s}, {:?}): {:#018x}", o_p, state.finish());
             }
         }
-        log::debug!("board: {:#018x}", state.finish());
     }
 }
 
@@ -102,7 +109,6 @@ impl Color {
 impl Hash for Color {
     fn hash<H: Hasher>(&self, state: &mut H) {
         if *self == Color::Black { state.write_u64(Self::ZOBRIST_PRN) }
-        log::debug!("color: {:#018x}", state.finish());
     }
 }
 
@@ -113,9 +119,9 @@ impl Castling {
 impl Hash for Castling {
     fn hash<H: Hasher>(&self, state: &mut H) {
         for (c, cs, cr) in self.iter_rights() {
-            if cr { state.write_u64(Self::ZOBRIST_PRNS[c as usize][cs as usize]) }
+            let prn = Self::ZOBRIST_PRNS[c as usize][cs as usize];
+            if cr { state.write_u64(prn) }
         }
-        log::debug!("castling: {:#018x}", state.finish());
     }
 }
 
@@ -125,8 +131,8 @@ impl File {
 
 impl Hash for File {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(Self::ZOBRIST_PRNS[*self as usize]);
-        log::debug!("en_passant: {:#018x}", state.finish());
+        let prn = Self::ZOBRIST_PRNS[*self as usize];
+        state.write_u64(prn);
     }
 }
 

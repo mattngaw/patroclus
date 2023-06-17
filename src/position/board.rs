@@ -11,7 +11,7 @@ use super::mailbox::Mailbox;
 use super::{Color, Role, Piece};
 
 /// The physical, time-independent state of a chess board
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Board {
     colors: [Bitboard; 2],
     roles: [Bitboard; 5],

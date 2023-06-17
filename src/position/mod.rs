@@ -128,7 +128,7 @@ impl Display for Piece {
 }
 
 /// A time-dependent representation of the state of a chess game
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Eq, Debug)]
 pub struct Position {
     /// The placement of pieces
     pub board: Board,
@@ -215,6 +215,28 @@ impl Flippable for Position {
 impl Display for Position {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.board)
+    }
+}
+
+impl PartialEq for Position {
+    fn eq(&self, other: &Self) -> bool {
+        self.board == other.board && 
+        self.turn == other.turn && 
+        self.castling == other.castling && 
+        self.en_passant == other.en_passant
+    }
+}
+
+impl Clone for Position {
+    fn clone(&self) -> Self {
+        Self { 
+            board: self.board, 
+            turn: self.turn, 
+            castling: self.castling, 
+            en_passant: self.en_passant, 
+            halfmove: self.halfmove, 
+            fullmove: self.fullmove
+        }
     }
 }
 
