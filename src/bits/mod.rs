@@ -1,10 +1,17 @@
 //! A module for working with and keeping track of squares.
 
+mod tests;
+
 use std::ops::{BitOr, BitAnd, BitXor, Not};
 use std::ops::{BitOrAssign, BitAndAssign, BitXorAssign};
 use std::fmt::{Display, Debug};
 
 use crate::util::PRINT_ORDER;
+
+
+/*************
+ * Flippable *
+ *************/
 
 /// Used to find the flipped representation of a object (from opposite POV)
 pub trait Flippable 
@@ -19,103 +26,9 @@ where Self: Sized {
 }
 
 
-/// An index on a chessboard
-/// 
-/// A [`Square`] indexes into a [`Board`] or [`Bitboard`] via rank-major order.
-/// ```text
-/// 8   56 57 58 59 60 61 62 63
-/// 7   48 49 50 51 52 53 54 55
-/// 6   40 41 42 43 44 45 46 47
-/// 5   32 33 34 35 36 37 38 39
-/// 4   24 25 26 27 28 29 30 31
-/// 3   16 17 18 19 20 21 22 23
-/// 2    8  9 10 11 12 13 14 15
-/// 1    0  1  2  3  4  5  6  7
-/// 
-///      a  b  c  d  e  f  g  h
-/// ```
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Square(u32);
-
-impl Square {
-    /// Total number of squares on a chessboard
-    pub const COUNT: usize = 64;
-
-    /// Use to iterate over squares from index 0 to 63
-    const ITER: [Square; Self::COUNT] = {
-        let mut result = [Square::new(0); Self::COUNT];
-        let mut i = 0;
-        while i < Self::COUNT {
-            result[i] = Square::new(i as u32);
-            i += 1;
-        }
-        result
-    };
-
-}
-
-impl Square {
-    /// Creates a new square
-    #[inline]
-    pub const fn new(value: u32) -> Self {    
-        debug_assert!(value < 64);
-        Square(value)
-    }
-
-    /// Gets rank of square
-    #[inline]
-    pub fn rank(self) -> Rank {
-        Rank::try_from(self.0 / 8).unwrap()
-    }
-    
-    /// Gets file of square
-    #[inline]
-    pub fn file(self) -> File {
-        File::try_from(self.0 % 8).unwrap()
-    }
-
-    /// Returns an iterator over all of the squares
-    pub fn iter() -> std::array::IntoIter<Square, {Self::COUNT}> {
-        Self::ITER.into_iter()
-    }
-}
-
-impl From<Coords> for Square {
-    /// Creates a square from a [`Coords`]
-    #[inline]
-    fn from(Coords(f, r): Coords) -> Self {
-        Square::new(r as u32 * 8 + f as u32)
-    }
-}
-
-impl Flippable for Square {
-    #[inline]
-    fn flipped(&self) -> Self {
-        Square(63 - self.0)
-    }
-}
-
-impl Display for Square {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let r = self.rank();
-        let f = self.file();
-        let r_ch = char::from(r);
-        let f_ch = char::from(f);
-        write!(formatter, "{}{}", f_ch, r_ch)
-    }
-}
-
-impl From<Square> for usize {
-    /// Returns the value of the square as a [`usize`]
-    /// 
-    /// # Note
-    /// Typically used as an index (e.g. into a [`Vec`] or array)
-    #[inline]
-    fn from(s: Square) -> Self {
-        s.0 as usize
-    }
-}
-
+/********
+ * Rank *
+ ********/
 
 /// A row on a chessboard
 #[allow(missing_docs)]
@@ -183,22 +96,26 @@ impl TryFrom<char> for Rank {
 }
 
 impl Rank {
-    const ITER: [Rank; 8] = [
-        Rank::First, 
-        Rank::Second, 
-        Rank::Third,
-        Rank::Fourth, 
-        Rank::Fifth, 
-        Rank::Sixth, 
-        Rank::Seventh, 
-        Rank::Eighth
-    ];
-
     /// Returns an iterator over all of the ranks
     pub fn iter() -> std::array::IntoIter<Rank, 8> {
-        Self::ITER.into_iter()
+        const RANKS: [Rank; 8] = [
+            Rank::First, 
+            Rank::Second, 
+            Rank::Third,
+            Rank::Fourth, 
+            Rank::Fifth, 
+            Rank::Sixth, 
+            Rank::Seventh, 
+            Rank::Eighth
+        ];
+        RANKS.into_iter()
     }
 }
+
+
+/********
+ * File *
+ ********/
 
 /// A column on a chessboard
 #[allow(missing_docs)]
@@ -216,7 +133,7 @@ pub enum File {
 
 impl TryFrom<u32> for File {
     type Error = u32;
-
+    
     fn try_from(i: u32) -> Result<Self, Self::Error> {
         match i {
             0 => Ok(File::A),
@@ -249,7 +166,7 @@ impl From<File> for char {
 
 impl TryFrom<char> for File {
     type Error = char;
-
+    
     fn try_from(ch: char) -> Result<Self, Self::Error> {
         match ch {
             'a' => Ok(File::A),
@@ -266,28 +183,134 @@ impl TryFrom<char> for File {
 }
 
 impl File {
-    const ITER: [File; 8] = [
-        File::A,
-        File::B,
-        File::C,
-        File::D,
-        File::E,
-        File::F,
-        File::G,
-        File::H,
-    ];
-
     /// Returns an iterator over all of the files
     pub fn iter() -> std::array::IntoIter<File, 8> {
-        Self::ITER.into_iter()
+        const FILES: [File; 8] = [
+            File::A,
+            File::B,
+            File::C,
+            File::D,
+            File::E,
+            File::F,
+            File::G,
+            File::H,
+        ];
+        FILES.into_iter()
     }
 }
-
+    
+    
+/**********
+ * Coords *
+ **********/
 
 /// The coordinates of a square on a chessboard
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Coords(pub File, pub Rank);
 
+
+/**********
+ * Square *
+ **********/
+
+/// An index on a chessboard
+/// 
+/// A [`Square`] indexes into a [`Board`] or [`Bitboard`] via rank-major order.
+/// ```text
+/// 8   56 57 58 59 60 61 62 63
+/// 7   48 49 50 51 52 53 54 55
+/// 6   40 41 42 43 44 45 46 47
+/// 5   32 33 34 35 36 37 38 39
+/// 4   24 25 26 27 28 29 30 31
+/// 3   16 17 18 19 20 21 22 23
+/// 2    8  9 10 11 12 13 14 15
+/// 1    0  1  2  3  4  5  6  7
+/// 
+///      a  b  c  d  e  f  g  h
+/// ```
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Square(u32);
+
+impl Square {
+    /// Total number of squares on a chessboard
+    pub const COUNT: usize = 64;
+}
+
+impl Square {
+    /// Creates a new square
+    #[inline]
+    pub const fn new(value: u32) -> Self {    
+        debug_assert!(value < 64);
+        Square(value)
+    }
+    
+    /// Gets rank of square
+    #[inline]
+    pub fn rank(self) -> Rank {
+        Rank::try_from(self.0 / 8).unwrap()
+    }
+    
+    /// Gets file of square
+    #[inline]
+    pub fn file(self) -> File {
+        File::try_from(self.0 % 8).unwrap()
+    }
+    
+    /// Returns an iterator over all of the squares
+    pub fn iter() -> std::array::IntoIter<Square, {Self::COUNT}> {
+        const SQUARES: [Square; Square::COUNT] = {
+            let mut result = [Square::new(0); Square::COUNT];
+            let mut i = 0;
+            while i < Square::COUNT {
+                result[i] = Square::new(i as u32);
+                i += 1;
+            }
+            result
+        };
+        SQUARES.into_iter()
+    }
+}
+
+impl From<Coords> for Square {
+    /// Creates a square from a [`Coords`]
+    #[inline]
+    fn from(Coords(f, r): Coords) -> Self {
+        Square::new(r as u32 * 8 + f as u32)
+    }
+}
+
+impl Flippable for Square {
+    #[inline]
+    fn flipped(&self) -> Self {
+        Square(63 - self.0)
+    }
+}
+
+impl Display for Square {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let r = self.rank();
+        let f = self.file();
+        let r_ch = char::from(r);
+        let f_ch = char::from(f);
+        write!(formatter, "{}{}", f_ch, r_ch)
+    }
+}
+
+impl From<Square> for usize {
+    /// Returns the value of the square as a [`usize`]
+    /// 
+    /// # Note
+    /// Typically used as an index (e.g. into a [`Vec`] or array)
+    #[inline]
+    fn from(s: Square) -> Self {
+        s.0 as usize
+    }
+}
+
+
+/************
+ * Bitboard *
+ ************/
 
 /// An occupancy set for a chessboard
 /// 
