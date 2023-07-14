@@ -5,6 +5,7 @@ pub mod castling;
 pub mod board;
 pub mod zobrist;
 pub mod util;
+mod tests;
 
 use crate::bits::*;
 use self::castling::*;
@@ -179,6 +180,7 @@ impl Position {
             en_passant: get_en_passant(en_passant_str),
             halfmove: get_number(halfmove_str),
             fullmove: get_number(fullmove_str),
+
         };
         
         Ok(p)

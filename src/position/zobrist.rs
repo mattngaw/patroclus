@@ -8,14 +8,40 @@ use crate::{
         board::Board,
         castling::Castling,
     },
-    bits::{
-        File
-    }
+    bits::File,
 };
 
 use std::hash::{Hash, Hasher, BuildHasher};
 
 use const_random::const_random;
+
+/// A struct pairing a position with its Zobrist hash
+pub struct ZobristPosition {
+    /// The Zobrist hash
+    pub zobrist: u64,
+    /// The position
+    pub position: Position,
+}
+
+impl ZobristPosition {
+    /// Creates a new `ZobristPosition`
+    pub fn new() -> Self {
+        ZobristPosition::from(
+            Position::new()
+        )
+    }
+}
+
+impl From<Position> for ZobristPosition {
+    fn from(p: Position) -> Self {
+        let mut h = ZobristHasher::new();
+        p.hash(&mut h);
+        ZobristPosition { 
+            zobrist: h.finish(),
+            position: p,
+        }
+    }
+}
 
 /// A ZobristHasher factory
 pub struct BuildZobristHasher;
@@ -71,6 +97,12 @@ impl Hasher for ZobristHasher {
     }
 }
 
+
+impl Hash for ZobristPosition {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u64(self.zobrist);
+    }
+}
 impl Hash for Position {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.board.hash(state);

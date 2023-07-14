@@ -10,6 +10,11 @@ use crate::position::util::{WHITE_KING, BLACK_KING};
 use super::mailbox::Mailbox;
 use super::{Color, Role, Piece};
 
+
+//=======//
+// Board //
+//=======//
+
 /// The physical, time-independent state of a chess board
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Board {
@@ -33,7 +38,7 @@ impl Board {
                 Bitboard::square(white_king), 
                 Bitboard::square(black_king)
             ],
-            roles: [Bitboard::empty(); 5],
+            roles: [Bitboard::EMPTY; 5],
             kings: [white_king, black_king],
             pieces: Mailbox::new(),
         }
@@ -372,20 +377,20 @@ impl Board {
         let pieces = vec![pawns, knights, bishops, rooks, queens];
         let pieces_pairings = pieces.into_iter().combinations(2);
 
-        log::trace!("  Checking that white and black pieces don't overlap");
-        assert_eq!(white & black, Bitboard::empty());
+        log::trace!("Checking that white and black pieces don't overlap");
+        assert_eq!(white & black, Bitboard::EMPTY);
 
-        log::trace!("  Checking that roles don't overlap");
+        log::trace!("Checking that roles don't overlap");
         for pair in pieces_pairings {
             assert!((pair[0] & pair[1]).is_empty());
         }
 
-        log::trace!("  Verifying the king squares");
+        log::trace!("Verifying the king squares");
         assert_ne!(self.kings[Color::White as usize], 
                    self.kings[Color::Black as usize]);
         // TODO Check that the kings are not adjacent
 
-        log::trace!("  Checking colors and roles overlap once and only once");
+        log::trace!("Checking colors and roles overlap once and only once");
         for c in [Color::White, Color::Black] {
             let c_b = self.colors[c as usize];
             for s in c_b {
@@ -404,7 +409,7 @@ impl Board {
             }
         }
 
-        log::trace!("  Checking that the mailbox matches the bitboards");
+        log::trace!("Checking that the mailbox matches the bitboards");
         for (s, o_p) in self.pieces {
             match o_p {
                 None => assert!(
@@ -428,22 +433,5 @@ impl Board {
 impl Display for Board {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.pieces)
-    }
-}
-
-#[cfg(test)]
-mod board_tests {
-    use super::*;
-
-    fn init() {
-        let _ = env_logger::builder().is_test(true).try_init();
-    }
-
-    #[test]
-    fn test_debug_verify() {
-        init();
-
-        let b = Board::new();
-        b.debug_verify();
     }
 }
