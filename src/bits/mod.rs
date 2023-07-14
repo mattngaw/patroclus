@@ -8,10 +8,9 @@ use std::fmt::{Display, Debug};
 
 use crate::util::PRINT_ORDER;
 
-
-/*************
- * Flippable *
- *************/
+//===========//
+// Flippable //
+//===========//
 
 /// Used to find the flipped representation of a object (from opposite POV)
 pub trait Flippable 
@@ -26,9 +25,9 @@ where Self: Sized {
 }
 
 
-/********
- * Rank *
- ********/
+//======//
+// Rank //
+//======//
 
 /// A row on a chessboard
 #[allow(missing_docs)]
@@ -113,9 +112,9 @@ impl Rank {
 }
 
 
-/********
- * File *
- ********/
+//======//
+// File //
+//======//
 
 /// A column on a chessboard
 #[allow(missing_docs)]
@@ -200,18 +199,18 @@ impl File {
 }
     
     
-/**********
- * Coords *
- **********/
+//========//
+// Coords //
+//========//
 
 /// The coordinates of a square on a chessboard
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Coords(pub File, pub Rank);
 
 
-/**********
- * Square *
- **********/
+//========//
+// Square //
+//========//
 
 /// An index on a chessboard
 /// 
@@ -307,10 +306,9 @@ impl From<Square> for usize {
     }
 }
 
-
-/************
- * Bitboard *
- ************/
+//==========//
+// Bitboard //
+//==========//
 
 /// An occupancy set for a chessboard
 /// 
@@ -334,7 +332,7 @@ impl From<Square> for usize {
 /// 
 /// bitboard of knights     bitboard of white pieces   bitboard of white knights
 /// ```
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, PartialOrd, Ord)]
 pub struct Bitboard(u64);
 
 
@@ -360,7 +358,19 @@ impl Bitboard {
         0x4040_4040_4040_4040,
         0x8080_8080_8080_8080,
     ];
-}
+
+    /// An empty bitboard
+    pub const EMPTY: Bitboard = Bitboard::new(0u64);
+    
+    /// A full bitboard
+    pub const FULL: Bitboard = Bitboard::new(!0u64);
+
+    /// A bitboard of all the perimeter squares
+    pub const PERIMETER: Bitboard = Bitboard::new(
+        Self::RANK_MASKS[0] | Self::RANK_MASKS[7] | 
+        Self::FILE_MASKS[0] | Self::FILE_MASKS[7]
+    );
+}    
 
 
 /// Create methods
@@ -370,18 +380,6 @@ impl Bitboard {
      #[inline]
     pub const fn new(value: u64) -> Self {
         Bitboard(value)
-    }
-
-    /// Creates an empty bitboard
-    #[inline]
-    pub const fn empty() -> Self {
-        Bitboard(0u64)
-    }
-
-    /// Creates a full bitboard
-    #[inline]
-    pub const fn full() -> Self {
-        Bitboard(!0u64)
     }
 
     /// Creates a bitboard with the squares in rank `r` set
@@ -423,11 +421,17 @@ impl Bitboard {
     pub fn is_any(self) -> bool {
         self.0 != 0u64
     }
-
+    
     /// Returns `true` if the bitboard contains only one square
     #[inline]
     pub fn is_singular(self) -> bool {
         self.0.is_power_of_two()
+    }
+    
+    /// Returns `true` if the bitboard is a subset of `b`
+    #[inline]
+    pub fn is_subset(self, b: Bitboard) -> bool {
+        self & b == self
     }
     
     /// Returns `true` if the bitboard contains the square `s`
@@ -456,10 +460,49 @@ impl Bitboard {
     /// is empty
     #[inline]
     pub fn smallest_square(self) -> Option<Square> {
-        self.is_any().then_some({
+        self.is_any().then(|| {
             let value = self.0.trailing_zeros(); 
             Square::new(value)
         })
+    }
+
+    /// Returns a vector of all subsets via the [Carry-Rippler trick](https://www.chessprogramming.org/Traversing_Subsets_of_a_Set#All_Subsets_of_any_Set)
+    pub fn subsets(self) -> Vec<Bitboard> {
+        let set = u64::from(self);
+        let mut subsets = Vec::new();
+        let mut subset = 0u64;
+        loop {
+            subset = subset.wrapping_sub(set) & set;
+            if subset == 0 { break }
+            subsets.push(Bitboard::new(subset));
+        }
+        subsets
+    }
+
+    /// Returns a vector of all subsets via a recursive subsets algorithm
+    /// 
+    /// # Note
+    /// Use this only to verify [`subsets`](Self::subsets())
+    pub fn subsets_slow(self) -> Vec<Bitboard> {
+        let mut subsets = self.subsets_slow_helper();
+        subsets.remove(0);
+        subsets
+    }
+
+    fn subsets_slow_helper(self) -> Vec<Bitboard> {
+        if let Some(s) = self.smallest_square() {
+            let mut next = self;
+            next.remove(s);
+            let without = next.subsets_slow_helper();
+            let mut subsets = without.clone();
+            for mut b in without {
+                b.insert(s);
+                subsets.push(b);
+            }
+            subsets
+        } else {
+            vec![Bitboard::EMPTY]
+        }
     }
 }
 
@@ -481,6 +524,12 @@ impl Bitboard {
         let c = self.contains(s);
         self.0 &= !(1 << s.0);
         c
+    }
+}
+
+impl From<Bitboard> for u64 {
+    fn from(value: Bitboard) -> Self {
+        value.0
     }
 }
 
@@ -554,6 +603,14 @@ impl Iterator for Bitboard {
 
     fn next(&mut self) -> Option<Self::Item> {
         let s = self.largest_square();
+        if let Some(s) = s { self.remove(s); }
+        s
+    }
+}
+
+impl DoubleEndedIterator for Bitboard {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let s = self.smallest_square();
         if let Some(s) = s { self.remove(s); }
         s
     }

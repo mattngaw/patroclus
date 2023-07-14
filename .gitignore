@@ -1,5 +1,9 @@
 /target
 
+/logs
+
 /.vscode
 
 /.devcontainer
+
+Cargo.lock

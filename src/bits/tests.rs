@@ -98,10 +98,57 @@ mod file_tests {
 
 #[cfg(test)]
 mod square_tests {
-    
+    use crate::bits::Square;
+
+    #[test]
+    fn new() {
+        let s1 = Square::new(42);
+        assert_eq!(s1.0, 42);
+    }
+
+    #[test]
+    fn rank() {
+        use crate::bits::Rank;
+        let s1 = Square::new(42);
+        assert_eq!(s1.rank(), Rank::Sixth);
+    }
+
+    #[test]
+    fn file() {
+        use crate::bits::File;
+        let s1 = Square::new(42);
+        assert_eq!(s1.file(), File::C);
+    }
+
+    #[test]
+    fn iter() {
+        let iter1 = Square::iter();
+        for (i, s) in iter1.enumerate() {
+            assert_eq!(s.0, i as u32);
+        }
+    }
+
+    #[test]
+    fn flip() {
+        use crate::bits::Flippable;
+        assert_eq!(Square::new(42).flipped(), Square::new(21));
+    }
 }
 
 #[cfg(test)]
 mod bitboard_tests{
+    use crate::bits::Bitboard;
 
+    #[test]
+    fn subsets() {
+        let b = Bitboard::new(123);
+        for sub_b in b.subsets() {
+            assert!(sub_b.is_subset(b));
+        }
+        let mut subsets = b.subsets();
+        let mut subsets_slow = b.subsets_slow();
+        subsets.sort();
+        subsets_slow.sort();
+        assert_eq!(subsets, subsets_slow)
+    }
 }
